@@ -1,6 +1,6 @@
 $ ->
 
-    window.wsUri = 'ws://localhost:8080/status'
+    window.wsUri ?= 'ws://localhost:8080/status'
 
     updateSpace = (data) ->
         for row, y in data

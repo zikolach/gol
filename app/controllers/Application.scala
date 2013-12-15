@@ -6,6 +6,7 @@ import scala.concurrent.{Future, ExecutionContext}
 import ExecutionContext.Implicits.global
 import scala.util.Try
 import scala.annotation.tailrec
+import play.api.Play
 
 object Application extends Controller {
 
@@ -99,7 +100,8 @@ object Application extends Controller {
   }
 
   def index = Action {
-    Ok(views.html.index("Game of Life!!!"))
+    val hostname = scala.util.Properties.envOrElse("hostname", Play.configuration.getString("server.hostname").getOrElse("localhost"))
+    Ok(views.html.index("Game of Life!!!", hostname))
   }
 
   def status = WebSocket.using[String] {
