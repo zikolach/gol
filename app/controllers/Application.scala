@@ -7,6 +7,8 @@ import ExecutionContext.Implicits.global
 import scala.util.Try
 import scala.annotation.tailrec
 import play.api.Play
+import play.api.Play.current
+
 
 object Application extends Controller {
 
