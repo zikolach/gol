@@ -10,7 +10,8 @@
         <script src="@routes.Assets.at("javascripts/jquery-1.9.0.min.js")" type="text/javascript"></script>
         <script src="@routes.Assets.at("javascripts/jcanvas.min.js")" type="text/javascript"></script>
         <script type="text/javascript">
-            window.wsUri = 'ws://@hostname/status'
+            window.startGameUri = 'ws://@hostname/connect?user=zulu'
+            window.joinGameUri = 'ws://@hostname/connect?user=zulu&game='
         </script>
     </head>
     <body>
