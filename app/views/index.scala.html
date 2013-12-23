@@ -2,19 +2,17 @@
 
 @main("Welcome to Play", hostname) {
 
-  <h1>@message</h1>
-  <select id="selectWidth">
-      @List(10, 25, 50, 100).map { n =>
-      <option value="@n">@n</option>
-      }
-  </select>
-  <select id="selectHeight">
-      @List(10, 25, 50, 100).map { n =>
-      <option value="@n">@n</option>
-      }
-  </select>
-  <input type="button" value="start" id="start">
-  <input type="button" value="pause" id="stop">
 
-  <div id="space"></div>
+  <h1>@message</h1>
+  <select id="list">
+      <option value="create">Create a game</option>
+  </select>
+  <input type="button" value="choose" id="choose">
+  <input type="button" value="pause" id="pause">
+  <input type="button" value="stop" id="stop">
+  <hr>
+
+  <div id="gameSpace">
+  </div>
+
 }
