@@ -73,14 +73,14 @@ $ ->
             return
 
         wsClose: (evt) ->
-            console.log evt
+            #console.log evt
             @destroy()
             return
 
         wsMessage: (evt) ->
             #console.log evt
             data = evt.data.split('\n')
-            console.log evt
+            #console.log evt
             command = data[0].split(' ')
             switch command[0]
                 when 'UPDATE'
@@ -151,7 +151,7 @@ $ ->
                 cellX = Math.round (evt.offsetX - @width * @cellSize[0] / 2) / @cellSize[0] + @offset[0]
                 cellY = Math.round (evt.offsetY - @height * @cellSize[1] / 2) / @cellSize[1] + @offset[1]
                 @websocket.send "TOUCH\n#{cellX}\n#{cellY}"
-                console.log "TOUCH\n#{cellX}\n#{cellY}"
+                #console.log "TOUCH\n#{cellX}\n#{cellY}"
 
             @canvas.translateCanvas
                 translateX: dx
@@ -192,8 +192,8 @@ $ ->
 
     initList = ->
         websocket = new WebSocket(window.listGamesUri)
-        websocket.onopen = (evt) -> console.log(evt)
-        websocket.onclose = (evt) -> console.log(evt)
+        #websocket.onopen = (evt) -> console.log(evt)
+        #websocket.onclose = (evt) -> console.log(evt)
         websocket.onmessage = (evt) ->
             $('#list option.game').remove()
             evt.data.split('\n').forEach (game)->
