@@ -47,8 +47,8 @@ $ ->
             console.log 'destroying...'
             $('#pause').off()
             $('#stop').off()
-            @websocket.onclose = (evt) -> return
-            @websocket.close()
+            @websocket?.onclose = (evt) -> return
+            @websocket?.close()
             delete @websocket
             @canvas?.remove()
             delete @canvas
