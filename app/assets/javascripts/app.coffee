@@ -22,6 +22,13 @@ $ ->
             @canvas.translateCanvas
                 translateX: @width / 2 * @cellSize[0]
                 translateY: @height / 2 * @cellSize[1]
+            # minimap
+            @minimapSize = [200,100]
+            @minimap = $('<canvas></canvas>')
+            @minimap.attr('id', 'minimap')
+            @minimap.attr 'width', @minimapSize[0]
+            @minimap.attr 'height', @minimapSize[1]
+            $('div#minimap').append(@minimap)
 
             @lastMouseEvent = null
 
@@ -52,6 +59,8 @@ $ ->
             delete @websocket
             @canvas?.remove()
             delete @canvas
+            @minimap?.remove()
+            delete @minimap
             delete @offset
             delete @width
             delete @height
@@ -92,6 +101,66 @@ $ ->
                 else console.log "Unknown command: #{data[0]}"
             return
 
+        displayMinimap: ->
+            # calculate space dimensions
+            dims = null
+            if @living.length > 0
+                dims = @living.reduce( (a, b) ->
+                    [
+                        Math.min(b[0], if a[0] == undefined then b[0] else a[0])
+                        Math.min(b[1], if a[1] == undefined then b[1] else a[1])
+                        Math.max(b[0], if a[2] == undefined then b[0] else a[2])
+                        Math.max(b[1], if a[3] == undefined then b[1] else a[3])
+                    ]
+                , [])
+            else
+                dims = [0,0,0,0]
+            size = [
+                Math.min(@minimapSize[0], dims[2] - dims[0] + 1)
+                Math.min(@minimapSize[1], dims[3] - dims[1] + 1)
+            ]
+            # correct aspect ratio
+            ratio = 1
+            ratio = size[0] / size[1] if size[1] isnt 0
+            size = [
+                Math.min(size[0], Math.floor(@minimapSize[1] * ratio))
+                Math.min(size[1], Math.floor(@minimapSize[0] / ratio))
+            ]
+            # init minimap with zeros
+            minimap = (((0) for [0...size[0]]) for [0...size[1]])
+            # transpose coordinates and calculate weight
+            maxWeight = 0
+            for cell in @living
+                x = Math.floor((cell[0] - dims[0]) / Math.abs(dims[2] - dims[0] + 1) * size[0])
+                y = Math.floor((cell[1] - dims[1]) / Math.abs(dims[3] - dims[1] + 1) * size[1])
+                if minimap[y]? && minimap[y][x]?
+                    minimap[y][x]++
+                    maxWeight = Math.max(minimap[y][x], maxWeight)
+            console.log minimap.map((a) -> a.join()).join('\n')
+            w = Math.min(@minimapSize[0], Math.floor(@minimapSize[1] * ratio))
+            h = Math.min(@minimapSize[1], Math.floor(@minimapSize[0] / ratio))
+            @minimap.draw
+                fn: (ctx) ->
+                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+                    if w > 0 and h > 0
+                        imgData = ctx.createImageData(w, h)
+                        for y in [0...h]
+                            for x in [0...w]
+                                pos = (y * w + x) * 4
+                                xx = Math.floor(x / w * size[0])
+                                yy = Math.floor(y / h * size[1])
+                                if minimap[yy] && minimap[yy][xx]
+                                    c = 255 - Math.floor((minimap[yy][xx] / maxWeight) * 255)
+                                else
+                                    c = 255
+                                imgData.data[pos+0] = c
+                                imgData.data[pos+1] = c
+                                imgData.data[pos+2] = c
+                                imgData.data[pos+3] = 255
+                        ctx.putImageData(imgData, (ctx.canvas.width - w) / 2, (ctx.canvas.height - h) / 2)
+                    return
+            return
+
         updateCanvas: ->
             self = @
             @canvas.clearCanvas()
@@ -124,6 +193,7 @@ $ ->
                     width: @cellSize[0]
                     height: @cellSize[1]
 
+            @displayMinimap()
             return
 
         updateSpace: (data) ->
