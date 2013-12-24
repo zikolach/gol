@@ -9,10 +9,12 @@ $ ->
 
         constructor: (url) ->
             @offset = [ 0, 0 ]
-            @width = 100
-            @height = 50
             @living = []
             @cellSize = [ 10, 10 ]
+
+            @width = Math.floor(($('div#gameSpace').parent().innerWidth() - 40) / @cellSize[0])
+            @height = 50
+
             # init canvas
             @canvas = $('<canvas></canvas>')
             @canvas.attr('id', 'gameSpace')
@@ -23,11 +25,13 @@ $ ->
                 translateX: @width / 2 * @cellSize[0]
                 translateY: @height / 2 * @cellSize[1]
             # minimap
-            @minimapSize = [200,100]
+
             @minimap = $('<canvas></canvas>')
             @minimap.attr('id', 'minimap')
+            @minimapSize = [200,100]
             @minimap.attr 'width', @minimapSize[0]
             @minimap.attr 'height', @minimapSize[1]
+
             $('div#minimap').append(@minimap)
 
             @lastMouseEvent = null
@@ -136,7 +140,7 @@ $ ->
                 if minimap[y]? && minimap[y][x]?
                     minimap[y][x]++
                     maxWeight = Math.max(minimap[y][x], maxWeight)
-            console.log minimap.map((a) -> a.join()).join('\n')
+            #console.log minimap.map((a) -> a.join()).join('\n')
             w = Math.min(@minimapSize[0], Math.floor(@minimapSize[1] * ratio))
             h = Math.min(@minimapSize[1], Math.floor(@minimapSize[0] / ratio))
             @minimap.draw
@@ -257,6 +261,15 @@ $ ->
                 }
             return
 
+        updateWidth: ->
+            @width = Math.floor(($('div#gameSpace').parent().innerWidth() - 40) / @cellSize[0])
+            @grid = null
+            @canvas.attr 'width', game.width * game.cellSize[0]
+            @canvas.translateCanvas
+                translateX: (@width / 2 + @offset[0]) * @cellSize[0]
+                translateY: (@height / 2 + @offset[1]) * @cellSize[1]
+            @updateCanvas()
+
 
     game = null
 
@@ -278,6 +291,8 @@ $ ->
                 else
                     console.log "your choise is #{choise}"
                     game = new GameOfLife(joinGameUri + choise)
+
+    window.onresize = (evt) -> if game? then game.updateWidth()
 
     initList()
 

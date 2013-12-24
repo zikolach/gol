@@ -1,32 +1,6 @@
-#space {
-    display: table;
-    width:auto;
-}
-
-.row {
-    display: table-row;
-    width:auto;
-}
-
-.cell {
-    width: 10px;
-    height: 10px;
-    background-color: #CCCCCC;
-    border: 1px solid #EEEEEE;
-    display: table-column;
-    float:left;
-    cursor: pointer;
-}
-
-.cell:hover {
-    border: 1px solid yellow;
-}
-
-.alive {
-    background-color: green;
-}
-
 canvas {
     border: 1px solid black;
     cursor: pointer;
 }
+
+div.th:empty {display: none;}

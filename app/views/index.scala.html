@@ -1,21 +1,34 @@
 @(message: String, hostname: String)
 
 @main("Welcome to Play", hostname) {
+  <div class="row">
+      <div class="large-4 medium-4 columns">
+          <h1>@message</h1>
+      </div>
+      <div class="large-4 medium-4 columns text-center">
+          <div class="th" id="minimap"></div>
+      </div>
+      <div class='large-4 medium-4 columns'>
+          <h5>Controls</h5>
+          <form>
+              <div class="row">
+                  <select id="list">
+                      <option value="create">Create a game</option>
+                  </select>
+              </div>
+              <div class="row">
+                  <a class="small button" id="choose">Choose</a>
+                  <a class="small button" id="pause">Pause</a>
+                  <a class="small alert button" id="stop">Stop</a>
+              </div>
+          </form>
+      </div>
 
-
-  <h1>@message</h1>
-  <select id="list">
-      <option value="create">Create a game</option>
-  </select>
-  <input type="button" value="choose" id="choose">
-  <input type="button" value="pause" id="pause">
-  <input type="button" value="stop" id="stop">
-  <hr>
-  <div id="minimap">
   </div>
-  <div id="gameSpace">
+  <div class="row">
+      <div class="large-12 columns text-center">
+          <div id="gameSpace" class="th"></div>
+      </div>
   </div>
-
-
 
 }

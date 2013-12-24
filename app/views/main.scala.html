@@ -1,22 +1,31 @@
 @(title: String, hostname: String)(content: Html)
 
-<!DOCTYPE html>
+<!doctype html>
 
-<html xmlns="http://www.w3.org/1999/html">
+<html class="no-js" lang="en">
     <head>
         <title>@title</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/foundation.css")">
         <link rel="stylesheet" media="screen" href="@routes.Assets.at("stylesheets/main.css")">
         <link rel="shortcut icon" type="image/png" href="@routes.Assets.at("images/favicon.png")">
-        <script src="@routes.Assets.at("javascripts/jquery-1.9.0.min.js")" type="text/javascript"></script>
+        <script src="@routes.Assets.at("javascripts/modernizr.js")" type="text/javascript"></script>
+    </head>
+    <body>
+
+        @content
+
+        <script src="@routes.Assets.at("javascripts/jquery.js")" type="text/javascript"></script>
+        <script src="@routes.Assets.at("javascripts/foundation.min.js")" type="text/javascript"></script>
         <script src="@routes.Assets.at("javascripts/jcanvas.min.js")" type="text/javascript"></script>
         <script type="text/javascript">
             window.startGameUri = 'ws://@hostname/connect?user=zulu'
             window.joinGameUri = 'ws://@hostname/connect?user=zulu&game='
             window.listGamesUri = 'ws://@hostname/list'
         </script>
-    </head>
-    <body>
-        @content
         <script src="@routes.Assets.at("javascripts/app.js")" type="text/javascript"></script>
+        <script>
+            $(document).foundation();
+        </script>
     </body>
 </html>
