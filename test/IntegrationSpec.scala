@@ -1,3 +1,4 @@
+import org.openqa.selenium.firefox.FirefoxDriver
 import org.specs2.mutable._
 import org.specs2.runner._
 import org.junit.runner._
@@ -14,11 +15,11 @@ class IntegrationSpec extends Specification {
 
   "Application" should {
 
-    "work from within a browser" in new WithBrowser {
+    "work from within a browser" in new WithBrowser(webDriver = Helpers.FIREFOX) {
 
       browser.goTo("http://localhost:" + port)
 
-      browser.pageSource must contain("Your new application is ready.")
+      browser.pageSource must contain("Game of Life")
     }
   }
 }

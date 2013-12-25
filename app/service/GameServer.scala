@@ -17,7 +17,8 @@ import service.Game.Touch
 import service.Game.Join
 import scala.Some
 import service.Game.Joined
-
+import akka.actor.Terminated
+import scala.language.implicitConversions
 
 class GameServer extends Actor {
 
@@ -128,16 +129,21 @@ class Game extends Actor {
 
   import service.Game._
 
-  var currentState: GameState = GameState()
+  var space: Space = Space()
   var rectOpt: Option[Rect] = None
-
-  def createTimer(): Cancellable = context.system.scheduler.schedule(100 millis, 100 millis, self, Step)
-
+  var paused = true
   val (gameEnumerator, gameChannel) = Concurrent.broadcast[String]
-  var timerOpt: Option[Cancellable] = None
 
   def sendUpdate() {
-    gameChannel push s"UPDATE ${self.path.toString}\n${currentState.toSet(rectOpt).map(c => s"${c._1}:${c._2}").mkString("\n")}"
+    gameChannel push s"UPDATE ${self.path.toString}\n${space.toSet(rectOpt).map(c => s"${c.x}:${c.y}").mkString("\n")}"
+  }
+
+  def nextStep() {
+    if (!paused) context.system.scheduler.scheduleOnce(100 millis) { self ! Step }
+    val (newState, newRect) = space.transform().persist(rectOpt)
+    space = newState
+    rectOpt = newRect
+    sendUpdate()
   }
 
   def receive: Actor.Receive = {
@@ -146,46 +152,34 @@ class Game extends Actor {
       gameChannel push s"JOINED $username TO ${self.path.toString}"
 
     case Touch(x, y) =>
-      Logger.info(s"space touched at [$x:$y]")
-      currentState =
-        if (currentState(x, y)) currentState -- GameState((x, y))
-        else currentState ++ GameState((x, y))
+      //Logger.info(s"space touched at [$x:$y]")
       rectOpt match {
         case Some(rect) =>
-          rectOpt = Some(Rect(
-            Math.min(rect.x1, x),
-            Math.min(rect.y1, y),
-            Math.max(rect.x2, x),
-            Math.max(rect.y2, y)
-          ))
+          if (space(x, y))
+            space --= Space((x, y))
+          else {
+            space ++= Space((x, y))
+            rectOpt = Some(rect.extend((x,y).toPoint))
+          }
         case None =>
+          space = Space((x, y))
           rectOpt = Some(Rect(x, y, x, y))
       }
-      Logger.debug(s"current state \n${currentState.toString(rectOpt)}")
+      //Logger.debug(s"current state \n${space.toString(rectOpt)}")
       sendUpdate()
 
     case Pause =>
-      timerOpt match {
-        case Some(timer) =>
-          timer.cancel()
-          timerOpt = None
-        case None =>
-          timerOpt = Some(createTimer())
-      }
+      paused = !paused
+      nextStep()
 
     case Stop =>
-      timerOpt.foreach(_.cancel())
       gameChannel.eofAndEnd()
       context.become(stopping)
       context.system.scheduler.scheduleOnce(1 second) {
         context.stop(self)
       }
 
-    case Step =>
-      val (newState, newRect) = currentState.transform().persist(rectOpt)
-      currentState = newState
-      rectOpt = newRect
-      sendUpdate()
+    case Step => nextStep()
 
   }
 
@@ -209,20 +203,22 @@ object Game {
 
   case class Joined(enumerator: Enumerator[String])
 
-  type GameState = (Int, Int) => Boolean
+  type Space = (Int, Int) => Boolean
 
-  case class Rect(x1: Int = 0, y1: Int = 0, x2: Int = 0, y2: Int = 0)
+  object Space {
 
-  object GameState {
-    def apply(p: (Int, Int)*): GameState = (x: Int, y: Int) => p.contains((x, y))
+    def apply(p: Point*): Space = (x: Int, y: Int) => p.contains((x, y).toPoint)
 
-    def apply(s: String): GameState =
+    def apply(points: Set[Point]): Space = (x: Int, y: Int) => points.contains((x, y))
+
+    def apply(s: String): Space =
       (x: Int, y: Int) => Try(s.split('\n')(y).charAt(x)).getOrElse(".") == 'O'
 
+    def empty: Space = (x: Int, y: Int) => false
 
   }
 
-  implicit class PrintableGameState(state: GameState) {
+  implicit class PrintableSpace(state: Space) {
     def toString(rectOpt: Option[Rect]): String = rectOpt match {
       case None => ""
       case Some(rect) =>
@@ -233,8 +229,8 @@ object Game {
     }
   }
 
-  implicit class TransformableGameState(state: GameState) {
-    def transform(): GameState =
+  implicit class TransformableSpace(state: Space) {
+    def transform(): Space =
       (x: Int, y: Int) =>
         (for {
           xx <- x - 1 to x + 1
@@ -245,7 +241,7 @@ object Game {
           case _ => state(x, y)
         }
 
-    def persist(rectOpt: Option[Rect]): (GameState, Option[Rect]) = {
+    def persist(rectOpt: Option[Rect]): (Space, Option[Rect]) = {
       rectOpt match {
         case Some(rect) =>
           val table: Set[(Int, Int)] = (for {
@@ -260,19 +256,19 @@ object Game {
       }
     }
 
-    def ++(other: GameState): GameState =
+    def ++(other: Space): Space =
       (x: Int, y: Int) => state(x, y) || other(x, y)
 
-    def --(other: GameState): GameState =
+    def --(other: Space): Space =
       (x: Int, y: Int) => state(x, y) && !other(x, y)
 
-    def toSet(rectOpt: Option[Rect]): Set[(Int, Int)] = rectOpt match {
+    def toSet(rectOpt: Option[Rect]): Set[Point] = rectOpt match {
       case None => Set.empty
       case Some(rect) =>
         (for {
           y <- rect.y1 to rect.y2
           x <- rect.x1 to rect.x2 if state(x, y)
-        } yield (x, y)).toSet
+        } yield (x, y).toPoint).toSet
     }
 
   }
