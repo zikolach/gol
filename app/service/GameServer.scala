@@ -242,18 +242,8 @@ object Game {
         }
 
     def persist(rectOpt: Option[Rect]): (Space, Option[Rect]) = {
-      rectOpt match {
-        case Some(rect) =>
-          val table: Set[(Int, Int)] = (for {
-            y <- rect.y1 - 1 to rect.y2 + 1
-            x <- rect.x1 - 1 to rect.x2 + 1 if state(x, y)
-          } yield (x, y)).toSet
-          val (xs, ys) = (table.map(_._1), table.map(_._2))
-          val newRect: Rect = Rect(xs.reduceOption(_ min _).getOrElse(0), ys.reduceOption(_ min _).getOrElse(0), xs.reduceOption(_ max _).getOrElse(0), ys.reduceOption(_ max _).getOrElse(0))
-          ((x: Int, y: Int) => table.contains((x, y)), Some(newRect))
-        case None =>
-          ((x: Int, y: Int) => false, None)
-      }
+      val table = state.toSet(rectOpt.map(_.zoom(1)))
+      ((x: Int, y: Int) => table.contains((x, y)), table.bounds)
     }
 
     def ++(other: Space): Space =
@@ -262,13 +252,14 @@ object Game {
     def --(other: Space): Space =
       (x: Int, y: Int) => state(x, y) && !other(x, y)
 
+    def toSet(rect: Rect): Set[Point] = (for {
+      y <- rect.y1 to rect.y2
+      x <- rect.x1 to rect.x2 if state(x, y)
+    } yield (x, y).toPoint).toSet
+
     def toSet(rectOpt: Option[Rect]): Set[Point] = rectOpt match {
       case None => Set.empty
-      case Some(rect) =>
-        (for {
-          y <- rect.y1 to rect.y2
-          x <- rect.x1 to rect.x2 if state(x, y)
-        } yield (x, y).toPoint).toSet
+      case Some(rect) => state.toSet(rect)
     }
 
   }

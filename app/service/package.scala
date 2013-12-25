@@ -34,6 +34,11 @@ package object service {
       if (p.y > y2) p.y else y2
     )
 
+    def zoom(left: Int, up: Int, right: Int, down: Int): Rect =
+      Rect(x1 - left, y1 - up, x2 + right, y2 + down)
+
+    def zoom(inc: Int): Rect = zoom(inc, inc, inc, inc)
+
     def intersect(other: Rect): Option[Rect] =
       if (other.x2 < x1 || other.x1 > x2 || other.y2 < y1 || other.y1 > y2) None
       else Some(Rect(
