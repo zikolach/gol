@@ -57,13 +57,8 @@ class GameServer extends Actor {
 
 object GameServer {
 
-
-  def list(): Future[(Iteratee[String, _], Enumerator[String])] = {
-    (gameServer ? Subscribe) map {
-      case Subscribed(enumerator) =>
-        val iteratee = Iteratee.consume[String]()
-        (iteratee, enumerator)
-    }
+  def list(): Future[(Iteratee[String, _], Enumerator[String])] = (gameServer ? Subscribe) map {
+    case Subscribed(enumerator) => (Iteratee.consume[String](), enumerator)
   }
 
   lazy val gameServer: ActorRef = Akka.system.actorOf(Props(classOf[GameServer]), "gameServer")
@@ -134,23 +129,28 @@ class Game extends Actor {
   var paused = true
   val (gameEnumerator, gameChannel) = Concurrent.broadcast[String]
 
-  def sendUpdate() {
-    gameChannel push s"UPDATE ${self.path.toString}\n${space.toSet(rectOpt).map(c => s"${c.x}:${c.y}").mkString("\n")}"
-  }
+  def sendUpdate() = gameChannel push s"UPDATE ${self.path.toString}\n${space.toSet(rectOpt).map(c => s"${c.x}:${c.y}").mkString("\n")}"
+
+  def sendJoin(username: String) = gameChannel push s"JOINED $username TO ${self.path.toString}"
+
+  def sendClose() = gameChannel.eofAndEnd()
 
   def nextStep() {
-    if (!paused) context.system.scheduler.scheduleOnce(100 millis) { self ! Step }
+    if (!paused) context.system.scheduler.scheduleOnce(100 millis) {
+      self ! Step
+    }
     val (newState, newRect) = space.transform().persist(rectOpt)
     space = newState
     rectOpt = newRect
     sendUpdate()
   }
 
-  def receive: Actor.Receive = {
+  def receive = normal
+
+  def normal: Actor.Receive = {
     case Join(username) =>
       sender ! Joined(gameEnumerator)
-      gameChannel push s"JOINED $username TO ${self.path.toString}"
-
+      sendJoin(username)
     case Touch(x, y) =>
       //Logger.info(s"space touched at [$x:$y]")
       rectOpt match {
@@ -159,7 +159,7 @@ class Game extends Actor {
             space --= Space((x, y))
           else {
             space ++= Space((x, y))
-            rectOpt = Some(rect.extend((x,y).toPoint))
+            rectOpt = Some(rect.extend((x, y).toPoint))
           }
         case None =>
           space = Space((x, y))
@@ -167,29 +167,63 @@ class Game extends Actor {
       }
       //Logger.debug(s"current state \n${space.toString(rectOpt)}")
       sendUpdate()
-
     case Pause =>
       paused = !paused
       nextStep()
-
     case Stop =>
-      gameChannel.eofAndEnd()
+      sendClose()
       context.become(stopping)
       context.system.scheduler.scheduleOnce(1 second) {
         context.stop(self)
       }
-
     case Step => nextStep()
-
   }
 
   def stopping: Receive = {
-    case _ =>
+    case _ => /* ignore all messages while stopping */
   }
 
 }
 
 object Game {
+
+//  import scala.language.reflectiveCalls
+//
+//  trait Rules {
+//    val states: Enumeration
+//
+//    sealed case class Cell(coords: Point, state: states.Value)
+//
+//    type State = (Int, Int) => states.Value
+//    type Transform = (State) => State
+//    type Persist = (State, Rect) => Set[Cell]
+//    val persistStates: Set[states.Value]
+//    val transform: Transform
+//    val persist: Persist
+//  }
+//
+//  class s2b3 extends Rules {
+//    val states = new Enumeration {
+//      val DEAD, ALIVE = Value
+//    }
+//    val persistStates = Set(states.ALIVE)
+//    val transform = (state: State) => (x: Int, y: Int) =>
+//      (for {
+//        xx <- x - 1 to x + 1
+//        yy <- y - 1 to y + 1 if xx != x || yy != y
+//      } yield state(xx, yy)).count(_ == states.ALIVE) match {
+//        case 2 => state(x, y)
+//        case 3 => states.ALIVE
+//        case _ => states.DEAD
+//      }
+//
+//    val persist: Persist = (state: State, rect: Rect) =>
+//      (for {
+//        x <- rect.x1 to rect.x2
+//        y <- rect.y1 to rect.y2
+//      } yield Cell((x, y).toPoint, state(x, y))).toSet.filter(c => persistStates.contains(c.state))
+//  }
+
 
   case class Touch(x: Int, y: Int)
 
@@ -225,7 +259,7 @@ object Game {
         (for {
           y <- rect.y1 to rect.y2
           x <- rect.x1 to rect.x2
-        } yield (if (state(x, y)) "O" else ".") + " " + (if (x == rect.x2) "\n" else "")).mkString
+        } yield s"${ if (state(x, y)) "O" else "." } ${ if (x == rect.x2) "\n" else "" }").mkString
     }
   }
 
@@ -236,9 +270,9 @@ object Game {
           xx <- x - 1 to x + 1
           yy <- y - 1 to y + 1 if xx != x || yy != y
         } yield state(xx, yy)).count(_ == true) match {
-          case n if n < 2 || n > 3 => false
-          case n if n == 3 => true
-          case _ => state(x, y)
+          case 2 => state(x, y)
+          case 3 => true
+          case _ => false
         }
 
     def persist(rectOpt: Option[Rect]): (Space, Option[Rect]) = {
