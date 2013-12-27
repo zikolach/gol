@@ -1,7 +1,6 @@
 package service
 
 import akka.actor._
-import scala.util.Try
 import play.api.libs.iteratee.{Iteratee, Enumerator, Concurrent}
 import scala.concurrent.duration._
 import play.api.libs.concurrent.Execution.Implicits._
@@ -30,7 +29,8 @@ class GameServer extends Actor {
 
     case Create =>
       val gameId = context.children.size + 1
-      val game = context.actorOf(Props[Game], s"game$gameId")
+//      val game = context.actorOf(Props[Game], s"game$gameId")
+      val game = context.actorOf(Props(classOf[RuleGame], "S2B3"), s"game$gameId")
       context.watch(game)
       sender ! Created(game)
       gameListChannel push context.children.map(_.path.toString).mkString("\n")
@@ -97,7 +97,6 @@ object GameServer {
   }
 
   // actor messages
-
   case object Create
 
   trait Result {
@@ -116,114 +115,9 @@ object GameServer {
 
   case class Subscribed(enumerator: Enumerator[String])
 
-
-}
-
-
-class Game extends Actor {
-
-  import service.Game._
-
-  var space: Space = Space()
-  var rectOpt: Option[Rect] = None
-  var paused = true
-  val (gameEnumerator, gameChannel) = Concurrent.broadcast[String]
-
-  def sendUpdate() = gameChannel push s"UPDATE ${self.path.toString}\n${space.toSet(rectOpt).map(c => s"${c.x}:${c.y}").mkString("\n")}"
-
-  def sendJoin(username: String) = gameChannel push s"JOINED $username TO ${self.path.toString}"
-
-  def sendClose() = gameChannel.eofAndEnd()
-
-  def nextStep() {
-    if (!paused) context.system.scheduler.scheduleOnce(100 millis) {
-      self ! Step
-    }
-    val (newState, newRect) = space.transform().persist(rectOpt)
-    space = newState
-    rectOpt = newRect
-    sendUpdate()
-  }
-
-  def receive = normal
-
-  def normal: Actor.Receive = {
-    case Join(username) =>
-      sender ! Joined(gameEnumerator)
-      sendJoin(username)
-    case Touch(x, y) =>
-      //Logger.info(s"space touched at [$x:$y]")
-      rectOpt match {
-        case Some(rect) =>
-          if (space(x, y))
-            space --= Space((x, y))
-          else {
-            space ++= Space((x, y))
-            rectOpt = Some(rect.extend((x, y).toPoint))
-          }
-        case None =>
-          space = Space((x, y))
-          rectOpt = Some(Rect(x, y, x, y))
-      }
-      //Logger.debug(s"current state \n${space.toString(rectOpt)}")
-      sendUpdate()
-    case Pause =>
-      paused = !paused
-      nextStep()
-    case Stop =>
-      sendClose()
-      context.become(stopping)
-      context.system.scheduler.scheduleOnce(1 second) {
-        context.stop(self)
-      }
-    case Step => nextStep()
-  }
-
-  def stopping: Receive = {
-    case _ => /* ignore all messages while stopping */
-  }
-
 }
 
 object Game {
-
-//  import scala.language.reflectiveCalls
-//
-//  trait Rules {
-//    val states: Enumeration
-//
-//    sealed case class Cell(coords: Point, state: states.Value)
-//
-//    type State = (Int, Int) => states.Value
-//    type Transform = (State) => State
-//    type Persist = (State, Rect) => Set[Cell]
-//    val persistStates: Set[states.Value]
-//    val transform: Transform
-//    val persist: Persist
-//  }
-//
-//  class s2b3 extends Rules {
-//    val states = new Enumeration {
-//      val DEAD, ALIVE = Value
-//    }
-//    val persistStates = Set(states.ALIVE)
-//    val transform = (state: State) => (x: Int, y: Int) =>
-//      (for {
-//        xx <- x - 1 to x + 1
-//        yy <- y - 1 to y + 1 if xx != x || yy != y
-//      } yield state(xx, yy)).count(_ == states.ALIVE) match {
-//        case 2 => state(x, y)
-//        case 3 => states.ALIVE
-//        case _ => states.DEAD
-//      }
-//
-//    val persist: Persist = (state: State, rect: Rect) =>
-//      (for {
-//        x <- rect.x1 to rect.x2
-//        y <- rect.y1 to rect.y2
-//      } yield Cell((x, y).toPoint, state(x, y))).toSet.filter(c => persistStates.contains(c.state))
-//  }
-
 
   case class Touch(x: Int, y: Int)
 
@@ -236,66 +130,5 @@ object Game {
   case class Join(username: String)
 
   case class Joined(enumerator: Enumerator[String])
-
-  type Space = (Int, Int) => Boolean
-
-  object Space {
-
-    def apply(p: Point*): Space = (x: Int, y: Int) => p.contains((x, y).toPoint)
-
-    def apply(points: Set[Point]): Space = (x: Int, y: Int) => points.contains((x, y))
-
-    def apply(s: String): Space =
-      (x: Int, y: Int) => Try(s.split('\n')(y).charAt(x)).getOrElse(".") == 'O'
-
-    def empty: Space = (x: Int, y: Int) => false
-
-  }
-
-  implicit class PrintableSpace(state: Space) {
-    def toString(rectOpt: Option[Rect]): String = rectOpt match {
-      case None => ""
-      case Some(rect) =>
-        (for {
-          y <- rect.y1 to rect.y2
-          x <- rect.x1 to rect.x2
-        } yield s"${ if (state(x, y)) "O" else "." } ${ if (x == rect.x2) "\n" else "" }").mkString
-    }
-  }
-
-  implicit class TransformableSpace(state: Space) {
-    def transform(): Space =
-      (x: Int, y: Int) =>
-        (for {
-          xx <- x - 1 to x + 1
-          yy <- y - 1 to y + 1 if xx != x || yy != y
-        } yield state(xx, yy)).count(_ == true) match {
-          case 2 => state(x, y)
-          case 3 => true
-          case _ => false
-        }
-
-    def persist(rectOpt: Option[Rect]): (Space, Option[Rect]) = {
-      val table = state.toSet(rectOpt.map(_.zoom(1)))
-      ((x: Int, y: Int) => table.contains((x, y)), table.bounds)
-    }
-
-    def ++(other: Space): Space =
-      (x: Int, y: Int) => state(x, y) || other(x, y)
-
-    def --(other: Space): Space =
-      (x: Int, y: Int) => state(x, y) && !other(x, y)
-
-    def toSet(rect: Rect): Set[Point] = (for {
-      y <- rect.y1 to rect.y2
-      x <- rect.x1 to rect.x2 if state(x, y)
-    } yield (x, y).toPoint).toSet
-
-    def toSet(rectOpt: Option[Rect]): Set[Point] = rectOpt match {
-      case None => Set.empty
-      case Some(rect) => state.toSet(rect)
-    }
-
-  }
 
 }

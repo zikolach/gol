@@ -1,4 +1,4 @@
-import service.Game.Space
+//import service.Game.Space
 import scala.language.implicitConversions
 
 package object service {
@@ -70,21 +70,21 @@ package object service {
     }
   }
 
-  implicit class IntTuple2(tuple: (Int, Int)) {
+//  implicit class IntTuple2(tuple: (Int, Int)) {
+//
+//    def min: Int = if (tuple._1 < tuple._2) tuple._1 else tuple._2
+//
+//    def max: Int = if (tuple._1 > tuple._2) tuple._1 else tuple._2
+//
+//    def sort: (Int, Int) = if (tuple._1 < tuple._2) (tuple._1, tuple._2) else (tuple._2, tuple._1)
+//
+//    def toPoint: Point = Point(tuple)
+//
+//  }
 
-    def min: Int = if (tuple._1 < tuple._2) tuple._1 else tuple._2
-
-    def max: Int = if (tuple._1 > tuple._2) tuple._1 else tuple._2
-
-    def sort: (Int, Int) = if (tuple._1 < tuple._2) (tuple._1, tuple._2) else (tuple._2, tuple._1)
-
-    def toPoint: Point = Point(tuple)
-
-  }
-
-  implicit class IntTuple4(tuple: (Int, Int, Int, Int)) {
-    def toRect: Rect = Rect(tuple._1, tuple._2, tuple._3, tuple._4)
-  }
+//  implicit class IntTuple4(tuple: (Int, Int, Int, Int)) {
+//    def toRect: Rect = Rect(tuple._1, tuple._2, tuple._3, tuple._4)
+//  }
 
 
   implicit class IntList(list: List[Int]) {
@@ -99,23 +99,23 @@ package object service {
       ).map(p => (p._1 + 1 - p._2, p._1))
   }
 
-  implicit class PointSet(grid: Set[Point]) {
-    def bounds: Option[Rect] = grid.foldLeft[Option[Rect]](None)((rectOpt, point) => rectOpt match {
-      case Some(rect) => Some(rect.extend(point))
-      case None => Some(Rect(point))
-    })
-
-    def toSpace: Space = Space(grid)
-
-    def split(borders: Rect, minGap: Int): List[(Rect, Set[Point])] = {
-      grid.map(_.x).toList.sorted.groupSeq(minGap) flatMap {
-        d =>
-          val points = grid.filter((d._1, borders.y1, d._2, borders.y2).toRect.contains)
-          points.bounds.map(_ -> points)
-      }
-    }
-
-  }
+//  implicit class PointSet(grid: Set[Point]) {
+//    def bounds: Option[Rect] = grid.foldLeft[Option[Rect]](None)((rectOpt, point) => rectOpt match {
+//      case Some(rect) => Some(rect.extend(point))
+//      case None => Some(Rect(point))
+//    })
+//
+//    def toSpace: Space = Space(grid)
+//
+//    def split(borders: Rect, minGap: Int): List[(Rect, Set[Point])] = {
+//      grid.map(_.x).toList.sorted.groupSeq(minGap) flatMap {
+//        d =>
+//          val points = grid.filter((d._1, borders.y1, d._2, borders.y2).toRect.contains)
+//          points.bounds.map(_ -> points)
+//      }
+//    }
+//
+//  }
 
   implicit class RectSet(set: Set[Rect]) {
 
