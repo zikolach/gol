@@ -6,6 +6,7 @@ import org.specs2.mutable._
 @RunWith(classOf[JUnitRunner])
 class GameTest extends Specification {
   import service._
+  import service.RuleGame._
 
   "Tuple" should {
 
@@ -21,15 +22,6 @@ class GameTest extends Specification {
       (1, 2).min === 1
     }
 
-  }
-
-  "Rect" should {
-    "be able to be created from different angles" in {
-      Rect((1,1),(2,2)) === Rect(1,1,2,2)
-      Rect((2,2),(1,1)) === Rect(1,1,2,2)
-      Rect((1,2),(2,1)) === Rect(1,1,2,2)
-      Rect((2,1),(1,2)) === Rect(1,1,2,2)
-    }
   }
 
   "List of Ints" should {
@@ -51,7 +43,7 @@ class GameTest extends Specification {
         (1,1).toPoint,
         (4,1).toPoint,
         (5,2).toPoint)
-      space.split(space.bounds.get, 2).sortBy(_._1.x1) === List(
+      space.split(space.bounds.get, 2).sortBy(_._1.ul.x) === List(
         (Rect(1,1,1,1), Set((1,1).toPoint)),
         (Rect(4,1,5,2), Set((4,1).toPoint,(5,2).toPoint))
       )

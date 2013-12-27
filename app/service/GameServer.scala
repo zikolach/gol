@@ -29,7 +29,6 @@ class GameServer extends Actor {
 
     case Create =>
       val gameId = context.children.size + 1
-//      val game = context.actorOf(Props[Game], s"game$gameId")
       val game = context.actorOf(Props(classOf[RuleGame], "S2B3"), s"game$gameId")
       context.watch(game)
       sender ! Created(game)

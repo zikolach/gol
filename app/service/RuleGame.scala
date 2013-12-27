@@ -12,6 +12,7 @@ import scala.concurrent.duration._
 import Rules._
 import play.Logger
 import scala.util.Random
+import scala.language.implicitConversions
 
 class RuleGame(rulesName: String) extends Actor {
 
@@ -96,7 +97,14 @@ object RuleGame {
     def toRect: Rect = (x, y).toRect
   }
 
+  object Point {
+    implicit def apply(tuple: (Int, Int)): Point = tuple.toPoint
+  }
+
   case class Rect(ul: Point, lr: Point) {
+    require(ul.x <= lr.x)
+    require(ul.y <= lr.y)
+
     def extend(point: Point): Rect =
       ((point.x, ul.x).min, (point.y, ul.y).min, (point.x, lr.x).max, (point.y, lr.y).max).toRect
 
@@ -104,11 +112,24 @@ object RuleGame {
 
     def zoom(left: Int, up: Int, right: Int, down: Int): Rect =
       (ul.x - left, ul.y - up, lr.x + right, lr.y + down).toRect
+
+    def intersect(other: Rect): Option[Rect] =
+      if (other.lr.x < ul.x || other.ul.x > lr.x || other.lr.y < ul.y || other.ul.y > lr.y) None
+      else Some(Rect(
+        (ul.x, other.ul.x).max, (ul.y, other.ul.y).max,
+        (lr.x, other.lr.x).min, (lr.y, other.lr.y).min
+      ))
+
+    def union(other: Rect): Rect = Rect(
+      (ul.x, other.ul.x).min, (ul.y, other.ul.y).min,
+      (lr.x, other.lr.x).max, (lr.y, other.lr.y).max
+    )
+
+    def contains(p: Point): Boolean = ul.x <= p.x && p.x <= lr.x && ul.y <= p.y && p.y <= lr.y
   }
 
   object Rect {
     def apply(point: Point): Rect = Rect(point, point)
-
     def apply(x1: Int, y1: Int, x2: Int, y2: Int): Rect = Rect((x1, y1).toPoint, (x2, y2).toPoint)
   }
 
@@ -256,7 +277,7 @@ object RuleGame {
     val initSize = 100
     override lazy val initialSpace: PersistedSpace = persist({
       case _ => if (Random.nextBoolean()) ALIVE else DEAD
-    }, Some(Rect(Point(0,0)).zoom(initSize / 2)))
+    }, Some(Rect(Point(0, 0)).zoom(initSize / 2)))
   }
 
   // list of implementations
