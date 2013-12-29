@@ -2,60 +2,74 @@ $ ->
 
     window.startGameUri ?= 'ws://localhost:8080/connect?user=zulu'
     window.joinGameUri ?= 'ws://localhost:8080/connect?user=zulu&game='
-
     window.listGamesUri ?= 'ws://localhost:8080/list'
 
     class GameOfLife
 
-        constructor: (url) ->
-            @offset = [ 0, 0 ]
-            @living = []
-            @cellSize = [ 10, 10 ]
+        living:         []              # set of alive cells
+        cellSize:       [ 10, 10 ]      # cell size on screen
+        display:        null            # display cache
+        cursor:         [0, 0]          # last cursor position in pixels
+        offset:         [0.0, 0.0]      # space offset in cells
 
-            @width = Math.floor(($('div#gameSpace').parent().innerWidth() - 40) / @cellSize[0])
-            @height = 50
+        showMinimap:    true            # display map?
+        minimap:                       # position/size of minimap
+            x: 20
+            y: 20
+            w: 200
+            h: 100
+
+        # translate game coordinates to screen
+        translateToCanvas: (position) ->
+            x = Math.round((position[0] - @offset[0]) * @cellSize[0] - @cellSize[0] / 2)
+            y = Math.round((position[1] - @offset[1]) * @cellSize[1] - @cellSize[1] / 2)
+            return [x, y]
+        # translate screen coordinates to game
+        translateFromCanvas: (position) ->
+            x = Math.floor(position[0] / @cellSize[0] + @offset[0])
+            y = Math.floor(position[1] / @cellSize[1] + @offset[1])
+            return [x, y]
+
+        constructor: (url) ->
+            # display elements
+            $('#createGame').hide()
+            $('#game').show()
+            $('#gameControls').children().show()
 
             # init canvas
-            @canvas = $('<canvas></canvas>')
-            @canvas.attr('id', 'gameSpace')
-            $('div#gameSpace').append(@canvas)
-            @canvas.attr 'width', @width * @cellSize[0]
-            @canvas.attr 'height', @height * @cellSize[1]
-            @canvas.translateCanvas
-                translateX: @width / 2 * @cellSize[0]
-                translateY: @height / 2 * @cellSize[1]
-            # minimap
+            @width = Math.floor($('div#gameSpace').parent().innerWidth() / @cellSize[0])
+            @height = 50
+            @canvas = $("<canvas id=\"gameSpace\" width=\"#{@width * @cellSize[0]}\" height=\"#{@height * @cellSize[1]}\"></canvas>")[0]
+            $('div#gameSpace').append($(@canvas))
 
-            @minimap = $('<canvas></canvas>')
-            @minimap.attr('id', 'minimap')
-            @minimapSize = [200,100]
-            @minimap.attr 'width', @minimapSize[0]
-            @minimap.attr 'height', @minimapSize[1]
-
-            $('div#minimap').append(@minimap)
-
-            @lastMouseEvent = null
-
+            # server
             @websocket = new WebSocket(url)
             self = @
             @websocket.onopen = (evt) -> self.wsOpen(evt)
             @websocket.onclose = (evt) -> self.wsClose(evt)
             @websocket.onmessage = (evt) -> self.wsMessage(evt)
 
-
+            # controls
+            $('#map').on 'click', -> self.toggleMap()
             $('#pause').on 'click', -> self.pause()
             $('#stop').on 'click', -> self.stop()
 
-            @canvas.on 'mousedown', (evt) -> self.canvasMouseDown(evt)
-            @canvas.on 'mouseup', (evt) -> self.canvasMouseUp(evt)
-            @canvas.on 'mousemove', (evt) -> self.canvasMouseMove(evt)
+            # mouse
+            @lastMouseEvent = null
+            $(@canvas).on 'mousedown', (evt) -> self.canvasMouseDown(evt)
+            $(@canvas).on 'mouseup', (evt) -> self.canvasMouseUp(evt)
+            $(@canvas).on 'mousemove', (evt) -> self.canvasMouseMove(evt)
 
-            @updateCanvas()
-
+            @interval = setInterval( ->
+                self.updateCanvas()
+            , 20
+            )
+            @needsUpdate = true
             return
 
         destroy: ->
             console.log 'destroying...'
+            clearInterval @interval
             $('#pause').off()
             $('#stop').off()
             @websocket?.onclose = (evt) -> return
@@ -63,14 +77,9 @@ $ ->
             delete @websocket
             @canvas?.remove()
             delete @canvas
-            @minimap?.remove()
-            delete @minimap
-            delete @offset
-            delete @width
-            delete @height
-            delete @living
-            delete @cellSize
-            delete @lastMouseEvent
+            $('#gameControls').children().hide()
+            $("#game").hide()
+            $("#createGame").show()
             console.log 'destroyed!'
 
         stop: ->
@@ -86,7 +95,6 @@ $ ->
             return
 
         wsClose: (evt) ->
-            #console.log evt
             @destroy()
             return
 
@@ -105,6 +113,11 @@ $ ->
                 else console.log "Unknown command: #{data[0]}"
             return
 
+        toggleMap: ->
+            @showMinimap = not @showMinimap
+            @updateCanvas()
+            return
+
         displayMinimap: ->
             # calculate space dimensions
             dims = null
@@ -120,15 +133,15 @@ $ ->
             else
                 dims = [0,0,0,0]
             size = [
-                Math.min(@minimapSize[0], dims[2] - dims[0] + 1)
-                Math.min(@minimapSize[1], dims[3] - dims[1] + 1)
+                Math.min(@minimap.w, dims[2] - dims[0] + 1)
+                Math.min(@minimap.h, dims[3] - dims[1] + 1)
             ]
             # correct aspect ratio
             ratio = 1
             ratio = size[0] / size[1] if size[1] isnt 0
             size = [
-                Math.min(size[0], Math.floor(@minimapSize[1] * ratio))
-                Math.min(size[1], Math.floor(@minimapSize[0] / ratio))
+                Math.min(size[0], Math.floor(@minimap.w * ratio))
+                Math.min(size[1], Math.floor(@minimap.h / ratio))
             ]
             # init minimap with zeros
             minimap = (((0) for [0...size[0]]) for [0...size[1]])
@@ -140,71 +153,88 @@ $ ->
                 if minimap[y]? && minimap[y][x]?
                     minimap[y][x]++
                     maxWeight = Math.max(minimap[y][x], maxWeight)
-            #console.log minimap.map((a) -> a.join()).join('\n')
-            w = Math.min(@minimapSize[0], Math.floor(@minimapSize[1] * ratio))
-            h = Math.min(@minimapSize[1], Math.floor(@minimapSize[0] / ratio))
-            @minimap.draw
-                fn: (ctx) ->
-                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-                    if w > 0 and h > 0
-                        imgData = ctx.createImageData(w, h)
-                        for y in [0...h]
-                            for x in [0...w]
-                                pos = (y * w + x) * 4
-                                xx = Math.floor(x / w * size[0])
-                                yy = Math.floor(y / h * size[1])
-                                if minimap[yy] && minimap[yy][xx]
-                                    c = 255 - Math.floor((minimap[yy][xx] / maxWeight) * 255)
-                                else
-                                    c = 255
-                                imgData.data[pos+0] = c
-                                imgData.data[pos+1] = c
-                                imgData.data[pos+2] = c
-                                imgData.data[pos+3] = 255
-                        ctx.putImageData(imgData, (ctx.canvas.width - w) / 2, (ctx.canvas.height - h) / 2)
-                    return
+
+            w = @minimap.w
+            h = @minimap.h
+
+            ctx = @canvas.getContext('2d')
+            zoomRatio = Math.floor(Math.min(w / size[0], h / size[1]))
+            posX = Math.floor((w - size[0] * zoomRatio) / 2)
+            posY = Math.floor((h - size[1] * zoomRatio) / 2)
+            imgData = ctx.createImageData(w, h)
+            for y in [0...h]
+                for x in [0...w]
+                    pos = (y * w + x) * 4
+                    xx = Math.floor((x - posX) / zoomRatio)
+                    yy = Math.floor((y - posY) / zoomRatio)
+                    if minimap[yy] && minimap[yy][xx]
+                        c = 255 - Math.floor((minimap[yy][xx] / maxWeight) * 255)
+                    else
+                        c = 240
+                    imgData.data[pos+0] = c
+                    imgData.data[pos+1] = c
+                    imgData.data[pos+2] = c
+                    imgData.data[pos+3] = 100
+            #ctx.globalAlpha = 0.5
+            ctx.putImageData(imgData, @minimap.x, @minimap.y)
             return
 
         updateCanvas: ->
-            self = @
-            @canvas.clearCanvas()
 
-            # draw grid
-            @canvas.draw
-              fn: (ctx) ->
-                imgData = self.grid
-                w = self.width + 2
-                h = self.height + 2
+            if @needsUpdate
+                ctx = @canvas.getContext('2d')
+                w = @canvas.width
+                h = @canvas.height
+                cellW = @cellSize[0]
+                cellH = @cellSize[1]
+
+                ctx.clearRect(0, 0, w, h)
+
+                # draw grid
+                imgData = @grid
+                gridW = w + 2 # 1 cell in each side
+                gridH = h + 2
                 if not imgData
-                    imgData = ctx.createImageData(w * self.cellSize[0], h * self.cellSize[1])
-                    for y in [0..h]
-                        for x in [0..w]
-                            pos = (y * w * self.cellSize[0] * self.cellSize[1] + x * self.cellSize[0]) * 4
+                    imgData = ctx.createImageData(gridW * cellW, gridH * cellH)
+                    for y in [0..gridH]
+                        for x in [0..gridW]
+                            pos = (y * gridW * cellW * cellH + x * cellW) * 4
                             imgData.data[pos+0] = 0
                             imgData.data[pos+1] = 0
                             imgData.data[pos+2] = 0
                             imgData.data[pos+3] = 255
-                    self.grid = imgData
-                ctx.putImageData(imgData, (-self.offset[0] % 1 - 0.5) * self.cellSize[0], (-self.offset[1] % 1 - 0.5) * self.cellSize[1])
-                return
+                    @grid = imgData
+                ctx.putImageData(imgData, (-@offset[0] % 1 - 0.5) * cellW, (-@offset[1] % 1 - 0.5) * cellH)
 
-            # draw alive cells
-            for cell in @living
-                @canvas.drawRect
-                    fillStyle: "green"
-                    x: cell[0] * @cellSize[0] - @cellSize[0] / 2
-                    y: cell[1] * @cellSize[1] - @cellSize[1] / 2
-                    width: @cellSize[0]
-                    height: @cellSize[1]
+                # draw alive cells
+                ctx.fillStyle = 'green'
+                for cell in @living
+                    pos = @translateToCanvas(cell)
+                    ctx.fillRect(pos[0], pos[1], cellW, cellH) if pos[0] > -cellW and pos[0] < w + cellW and pos[1] > -cellH and pos[1] < h + cellH
 
-            @displayMinimap()
+                @displayMinimap() if @showMinimap
+
+                @display = ctx.getImageData(0, 0, w, h)
+                @needsUpdate = false
+
+            @drawPointer()
+            return
+
+        drawPointer: ->
+            # if there is no cache
+            @updateCanvas() until @display
+            ctx = @canvas.getContext('2d')
+            # restore screen
+            ctx.putImageData(@display, 0, 0)
+            # draw cursor
+            pos = @translateToCanvas(@translateFromCanvas(@cursor))
+            ctx.strokeStyle = 'red'
+            ctx.strokeRect(pos[0], pos[1], @cellSize[0], @cellSize[1])
             return
 
         updateSpace: (data) ->
-#            console.log "space updated"
-#            console.log data
             @living = data
-            @updateCanvas()
+            @needsUpdate = true
             return
 
         canvasMouseDown: (evt) ->
@@ -222,53 +252,39 @@ $ ->
             dy = evt.offsetY - @lastMouseEvent.y
 
             if @lastMouseEvent.type is 'down' and dx < @cellSize[0] and dy < @cellSize[1]
-                cellX = Math.round (evt.offsetX - @width * @cellSize[0] / 2) / @cellSize[0] + @offset[0]
-                cellY = Math.round (evt.offsetY - @height * @cellSize[1] / 2) / @cellSize[1] + @offset[1]
-                @websocket.send "TOUCH\n#{cellX}\n#{cellY}"
-                #console.log "TOUCH\n#{cellX}\n#{cellY}"
+                cell = @translateFromCanvas([evt.offsetX, evt.offsetY])
+                @websocket.send "TOUCH\n#{cell[0]}\n#{cell[1]}"
 
-            @canvas.translateCanvas
-                translateX: dx
-                translateY: dy
-
-            @offset = [
-                @offset[0] - dx / @cellSize[0]
-                @offset[1] - dy / @cellSize[1]
-            ]
-            @updateCanvas()
+            @offset[0] -= dx / @cellSize[0]
+            @offset[1] -= dy / @cellSize[1]
+            @needsUpdate = true
             @lastMouseEvent = null
             return
 
         canvasMouseMove: (evt) ->
             if @lastMouseEvent
-                dx = evt.offsetX - @lastMouseEvent.x
-                dy = evt.offsetY - @lastMouseEvent.y
-
-                @canvas.translateCanvas
-                    translateX: dx
-                    translateY: dy
-
-                @offset = [
-                    @offset[0] - dx / @cellSize[0]
-                    @offset[1] - dy / @cellSize[1]
-                ]
-                @updateCanvas()
+                @offset[0] -= (evt.offsetX - @lastMouseEvent.x) / @cellSize[0]
+                @offset[1] -= (evt.offsetY - @lastMouseEvent.y) / @cellSize[1]
+                @needsUpdate = true
                 @lastMouseEvent = {
-                    x: @lastMouseEvent.x + dx
-                    y: @lastMouseEvent.y + dy
+                    x: evt.offsetX
+                    y: evt.offsetY
                     sh: evt.shiftKey
                     type: 'move'
                 }
+            @cursor = [evt.offsetX, evt.offsetY]
+            @drawPointer()
             return
 
         updateWidth: ->
             @width = Math.floor(($('div#gameSpace').parent().innerWidth() - 40) / @cellSize[0])
             @grid = null
-            @canvas.attr 'width', game.width * game.cellSize[0]
-            @canvas.translateCanvas
-                translateX: (@width / 2 + @offset[0]) * @cellSize[0]
-                translateY: (@height / 2 + @offset[1]) * @cellSize[1]
-            @updateCanvas()
+            $(@canvas).attr 'width', @width * @cellSize[0]
+            @needsUpdate = true
+#            @canvas.translateCanvas
+#                translateX: (@width / 2 + @offset[0]) * @cellSize[0]
+#                translateY: (@height / 2 + @offset[1]) * @cellSize[1]
+            #@updateCanvas()
 
 
     game = null
@@ -284,15 +300,15 @@ $ ->
         $('#choose').on 'click', ->
             choise = $('#list').val()
             game.destroy() if game
-            switch choise
-                when 'create'
-                    console.log 'create a new game...'
-                    game = new GameOfLife(startGameUri)
-                else
-                    console.log "your choise is #{choise}"
-                    game = new GameOfLife(joinGameUri + choise)
+            console.log "your choise is #{choise}"
+            game = new GameOfLife(joinGameUri + choise)
 
     window.onresize = (evt) -> if game? then game.updateWidth()
+    $("#create").on 'click', ->
+        console.log 'create a new game...'
+        game.destroy() if game
+        game = new GameOfLife(startGameUri)
+        return
 
     initList()
 

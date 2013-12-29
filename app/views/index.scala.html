@@ -1,34 +1,117 @@
 @(message: String, hostname: String)
 
 @main("Welcome to Play", hostname) {
-  <div class="row">
-      <div class="large-4 medium-4 columns">
-          <h1>@message</h1>
-      </div>
-      <div class="large-4 medium-4 columns text-center">
-          <div class="th" id="minimap"></div>
-      </div>
-      <div class='large-4 medium-4 columns'>
-          <h5>Controls</h5>
-          <form>
-              <div class="row">
-                  <select id="list">
-                      <option value="create">Create a game</option>
-                  </select>
-              </div>
-              <div class="row">
-                  <a class="small button" id="choose">Choose</a>
-                  <a class="small button" id="pause">Pause</a>
-                  <a class="small alert button" id="stop">Stop</a>
-              </div>
-          </form>
-      </div>
 
-  </div>
-  <div class="row">
-      <div class="large-12 columns text-center">
-          <div id="gameSpace" class="th"></div>
-      </div>
-  </div>
+    <nav class="top-bar" data-topbar="">
+        <!-- Title -->
+        <ul class="title-area">
+            <li class="name"><h1><a href="#">@message</a></h1></li>
+            <!-- Mobile Menu Toggle -->
+            <li class="toggle-topbar menu-icon"><a href="#"><span>Menu</span></a></li>
+        </ul>
+
+        <!-- Top Bar Section -->
+
+        <section class="top-bar-section">
+
+            <ul id="gameControls" class="right">
+                <li class="has-form hide">
+                    <a id="map" href="#" class="button">Map</a>
+                </li>
+                <li class="has-form hide">
+                    <a id="pause" href="#" class="button">Pause</a>
+                </li>
+                <li class="has-form hide">
+                    <a id="stop" href="#" class="button alert">Stop</a>
+                </li>
+            </ul>
+            <ul class="right">
+                <li class="has-form">
+                    <a href="#" class="button">Login</a>
+                </li>
+            </ul>
+        </section>
+    </nav>
+
+
+        <!-- main content goes here -->
+        <div id="createGame" class="row">
+            <div class="large-12 columns">
+                <form>
+                    <div class="row collapse">
+                        <div class="large-5 medium-5 columns">
+                            <fieldset>
+                                <legend>Find existing game</legend>
+                                <div class="row">
+                                    <div class="large-12 columns">
+                                        <label>List of games</label>
+                                        <select id="list">
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="large-12 columns">
+                                        <a class="button small" id="choose">Choose</a>
+                                    </div>
+                                </div>
+                            </fieldset>
+                        </div>
+                        <div class="large-2 medium-2 columns text-center" id="or">
+                            <b>-OR-</b>
+                        </div>
+                        <div class="large-5 medium-5 columns">
+                            <fieldset>
+                                <legend>Create new game</legend>
+                                <div class="row">
+                                    <div class="large-12 columns">
+                                        <label>Rules</label>
+                                        <select id="gameStrategy">
+                                            <option value="emptyS2B3">Basic S2B3 (initial empty)</option>
+                                            <option value="randomS2B3">Basic S2B3 (initial random)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="large-4 medium-4 columns">
+                                        <label>Space</label>
+                                        <select id="spaceType">
+                                            <option value="fixed" selected>Fixed</option>
+                                            <option value="reflective">Reflective</option>
+                                            <option value="infinite">Infinite</option>
+                                        </select>
+                                    </div>
+                                    <div class="large-4 medium-4 columns">
+                                        <label>Width</label>
+                                        <input type="text" placeholder="Width" />
+                                    </div>
+                                    <div class="large-4 medium-4 columns">
+                                        <label>Height</label>
+                                        <input type="text" placeholder="Height" />
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="large-12 columns">
+                                        <a class="button success small" id="create">Create</a>
+                                    </div>
+                                </div>
+                            </fieldset>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div id="game" class="row hide">
+            <div class=" large-12 columns">
+                <div class="row">
+                    <div class="large-12 columns" id="gameSpace">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+
+
 
 }
