@@ -14,7 +14,7 @@ object Application extends Controller {
   }
 
   def connect = WebSocket.async[String] { request  =>
-    val user = request.getQueryString("user")
+    val user = request.getQueryString("player")
     require(user.isDefined)
     val gameUrl = request.getQueryString("game")
     val gameParams = Map(
