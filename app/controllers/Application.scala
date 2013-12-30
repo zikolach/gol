@@ -17,7 +17,13 @@ object Application extends Controller {
     val user = request.getQueryString("user")
     require(user.isDefined)
     val gameUrl = request.getQueryString("game")
-    GameServer.connect(user.getOrElse("default"), gameUrl)
+    val gameParams = Map(
+      'gameStrategy -> request.getQueryString("gameStrategy"),
+      'spaceType -> request.getQueryString("spaceType"),
+      'spaceWidth -> request.getQueryString("spaceWidth"),
+      'spaceHeight -> request.getQueryString("spaceHeight")
+    )
+    GameServer.connect(user.getOrElse("default"), gameUrl, gameParams.filter(_._2.getOrElse("").length > 0))
 
   }
 

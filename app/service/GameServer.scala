@@ -27,28 +27,28 @@ class GameServer extends Actor {
 
   def receive: Actor.Receive = {
 
-    case Create =>
+    case Create(params) =>
       val gameId = context.children.size + 1
-      val game = context.actorOf(Props(classOf[RuleGame], "S2B3"), s"game$gameId")
+      val game = context.actorOf(Props(classOf[RuleGame], params), s"game$gameId")
       context.watch(game)
       sender ! Created(game)
-      gameListChannel push context.children.map(_.path.toString).mkString("\n")
+      gameListChannel push context.children.map(_.path.name.toString).mkString("\n")
       Logger.info(s"game ${game.path.toString} started")
 
     case Find(gameUrl) =>
-      context.children.find(_.path.toString == gameUrl) match {
+      context.children.find(_.path.toString.endsWith(gameUrl)) match {
         case Some(game) => sender ! Found(game)
         case None => sender ! NotFound
       }
 
     case Terminated(game) =>
       Logger.info(s"game ${game.path.toString} stopped")
-      gameListChannel.push(context.children.map(_.path.toString).mkString("\n"))
+      gameListChannel.push(context.children.map(_.path.name.toString).mkString("\n"))
 
     case Subscribe =>
       sender ! Subscribed(gameListEnumerator)
       context.system.scheduler.scheduleOnce(2 second) {
-        gameListChannel.push(context.children.map(_.path.toString).mkString("\n"))
+        gameListChannel.push(context.children.map(_.path.name.toString).mkString("\n"))
       }
 
   }
@@ -64,7 +64,7 @@ object GameServer {
 
   implicit val timeout = Timeout(2 second)
 
-  def connect(user: String, gameUrlOpt: Option[String]): Future[(Iteratee[String, _], Enumerator[String])] = {
+  def connect(user: String, gameUrlOpt: Option[String], gameParams: Map[Symbol, Option[String]]): Future[(Iteratee[String, _], Enumerator[String])] = {
 
     def join(game: ActorRef): Future[(Iteratee[String, _], Enumerator[String])] = {
       (game ? Join(user)) map {
@@ -88,7 +88,7 @@ object GameServer {
 
     (gameUrlOpt match {
       case Some(gameUrl) => gameServer ? Find(gameUrl)
-      case None => gameServer ? Create
+      case None => gameServer ? Create(gameParams)
     }) flatMap {
       case Created(game) => join(game)
       case Found(game) => join(game)
@@ -96,7 +96,7 @@ object GameServer {
   }
 
   // actor messages
-  case object Create
+  case class Create(gameParams: Map[Symbol, Option[String]])
 
   trait Result {
     def game: ActorRef

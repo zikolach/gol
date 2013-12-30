@@ -14,22 +14,30 @@ import play.Logger
 import scala.util.Random
 import scala.language.implicitConversions
 
-class RuleGame(rulesName: String) extends Actor {
+class RuleGame(gameParams: Map[Symbol, Option[String]]) extends Actor {
 
-  println(rulesName)
+  val rulesName: String = gameParams.getOrElse('gameStrategy, None).getOrElse("S2B3")
+  val params: Params = for {
+    (param, valueOpt) <- gameParams
+    value <- valueOpt
+  } yield param -> value
 
-  implicit val rules = RuleGame.rules.get(rulesName) match {
+
+  Logger.info(params.toString())
+  Logger.info(params.getClass.toString)
+
+  implicit val rules = (RuleGame.rules.get(rulesName) match {
     case Some(r) => r
     case None =>
       Logger.warn(s"Rules [$rulesName] not found, used default rules.")
       RuleGame.defaultRules
-  }
+  })(params)
 
   var currentSpace: PersistedSpace = rules.initialSpace
   var paused = true
   val (gameEnumerator, gameChannel) = Concurrent.broadcast[String]
 
-  def sendUpdate() = gameChannel push s"UPDATE ${self.path.toString}\n${currentSpace.cells.map(c => s"${c._1.x}:${c._1.y}:${c._2}").mkString("\n")}"
+  def sendUpdate() = gameChannel push s"UPDATE ${self.path.name.toString} ${rules.spaceWidth} ${rules.spaceHeight}\n${currentSpace.cells.map(c => s"${c._1.x}:${c._1.y}:${c._2}").mkString("\n")}"
 
   def sendJoin(username: String) = gameChannel push s"JOINED $username TO ${self.path.toString}"
 
@@ -75,6 +83,8 @@ class RuleGame(rulesName: String) extends Actor {
 
 object RuleGame {
 
+  type Params = Map[Symbol, String]
+
   trait State {
     //override def toString = this.getClass.getSimpleName
   }
@@ -113,6 +123,9 @@ object RuleGame {
     def zoom(left: Int, up: Int, right: Int, down: Int): Rect =
       (ul.x - left, ul.y - up, lr.x + right, lr.y + down).toRect
 
+    def translate(x: Int, y: Int): Rect =
+      (ul.x + x, ul.y + y, lr.x + x, lr.y + y).toRect
+
     def intersect(other: Rect): Option[Rect] =
       if (other.lr.x < ul.x || other.ul.x > lr.x || other.lr.y < ul.y || other.ul.y > lr.y) None
       else Some(Rect(
@@ -130,15 +143,21 @@ object RuleGame {
 
   object Rect {
     def apply(point: Point): Rect = Rect(point, point)
+
     def apply(x1: Int, y1: Int, x2: Int, y2: Int): Rect = Rect((x1, y1).toPoint, (x2, y2).toPoint)
   }
 
   /**
    * Abstract rules
    */
-  abstract class Rules {
+  abstract class Rules(params: Params) {
 
     import Rules._
+
+    Logger.info(params.toString())
+    val spaceType = params.get('spaceType).getOrElse("fixed")
+    val spaceWidth = params.get('spaceWidth).map(_.toInt).getOrElse(100)
+    val spaceHeight = params.get('spaceHeight).map(_.toInt).getOrElse(100)
 
     // transform between generations
     val transform: TransformFunc
@@ -169,7 +188,10 @@ object RuleGame {
         case Some(state) => state
         case None => defaultState
       }
-      PersistedSpace(cells, newSpace)
+      val ps = PersistedSpace(cells, newSpace)
+//      println(ps.toString)
+//      println(ps.bounds)
+      ps
     }
   }
 
@@ -210,12 +232,12 @@ object RuleGame {
       def persist(rectOpt: Option[Rect]): PersistedSpace = rules.persist(space, rectOpt)
     }
 
-    implicit class TransformablePersistedSpace(space: PersistedSpace)(implicit rules: Rules) {
-      def transform(): PersistedSpace = rules.persist(rules.transform(space.space), space.bounds)
+    implicit class TransformablePersistedSpace(persistedSpace: PersistedSpace)(implicit rules: Rules) {
+      def transform(): PersistedSpace = rules.persist(rules.transform(persistedSpace.space), persistedSpace.bounds)
     }
 
-    implicit class TouchableSpace(space: PersistedSpace)(implicit rules: Rules) {
-      def touch(point: Point): PersistedSpace = rules.touch(space, point)
+    implicit class TouchableSpace(persistedSpace: PersistedSpace)(implicit rules: Rules) {
+      def touch(point: Point): PersistedSpace = rules.touch(persistedSpace, point)
     }
 
   }
@@ -227,7 +249,7 @@ object RuleGame {
    * 3 neighbours - birth
    * 1 or 4+ neighbours - death
    */
-  abstract class S2B3 extends Rules {
+  abstract class S2B3(params: Params) extends Rules(params) {
 
     import Rules._
 
@@ -237,25 +259,89 @@ object RuleGame {
 
     val persistStates: Set[State] = Set(ALIVE)
 
-    val transform: TransformFunc =
+    //println("SpaceType: " + spaceType)
+
+    private val fixedTransform: TransformFunc =
+      (space: Space) =>
+        (p: Point) => {
+          val spaceRect = Rect(-spaceWidth / 2, -spaceHeight / 2, spaceWidth / 2, spaceHeight / 2)
+
+          val neighbourPositions = for {
+            xx <- p.x - 1 to p.x + 1
+            yy <- p.y - 1 to p.y + 1 if xx != p.x || yy != p.y
+          } yield (xx, yy).toPoint
+
+          neighbourPositions.map(
+            np => if (spaceRect.contains(np)) space(np) else DEAD
+          ).count(_ == ALIVE) match {
+            case 2 => space(p)
+            case 3 => ALIVE
+            case _ => DEAD
+          }
+        }
+
+    private val reflectiveTransform: TransformFunc =
+      (space: Space) =>
+        (p: Point) => {
+          val spaceRect = Rect(-spaceWidth / 2, -spaceHeight / 2, spaceWidth / 2, spaceHeight / 2)
+          //println(s"$p ::: ${spaceRect.zoom(2).contains(p)}")
+          val refNeighbour = (np: Point) =>
+            if (!spaceRect.zoom(1).contains(np)) DEAD
+            else
+              space(
+              if (np.x == spaceRect.ul.x - 1) spaceRect.lr.x
+              else if (np.x == spaceRect.lr.x + 1) spaceRect.ul.x
+              else np.x,
+              if (np.y == spaceRect.ul.y - 1) spaceRect.lr.y
+              else if (np.y == spaceRect.lr.y + 1) spaceRect.ul.y
+              else np.y
+            )
+
+          val neighbourPositions = for {
+            xx <- p.x - 1 to p.x + 1
+            yy <- p.y - 1 to p.y + 1 if xx != p.x || yy != p.y
+          } yield (xx, yy).toPoint
+
+          neighbourPositions.map(refNeighbour).count(_ == ALIVE) match {
+            case 2 => refNeighbour(p)
+            case 3 => ALIVE
+            case _ => DEAD
+          }
+        }
+
+    private val infiniteTransform: TransformFunc =
       (space: Space) => {
         (p: Point) =>
           (for {
             xx <- p.x - 1 to p.x + 1
             yy <- p.y - 1 to p.y + 1 if xx != p.x || yy != p.y
-            p <- Some((xx, yy).toPoint)
-          } yield space(p)).count(_ == ALIVE) match {
+            point <- Some((xx, yy).toPoint)
+          } yield space(point)).count(_ == ALIVE) match {
             case 2 => space((p.x, p.y).toPoint)
             case 3 => ALIVE
             case _ => DEAD
           }
       }
 
+    val transform: TransformFunc = spaceType match {
+      case "infinite" => infiniteTransform
+      case "reflective" => reflectiveTransform
+      case _ => fixedTransform
+    }
+
     val defaultState: State = DEAD
 
     lazy val initialSpace: PersistedSpace = persist({
       case _ => defaultState
     }, None)
+
+    override def persist(space: Space, rectOpt: Option[Rect]): PersistedSpace = spaceType match {
+      case "infinite" => super.persist(space, rectOpt)
+      case "reflective" | "fixed" =>
+        val spaceRect = Rect(-spaceWidth / 2, -spaceHeight / 2, spaceWidth / 2, spaceHeight / 2).zoom(-1)
+        super.persist(space, Some(spaceRect))
+      case _ => super.persist(space, rectOpt)
+    }
 
     def touch(space: PersistedSpace, point: Point): PersistedSpace = {
       val s: Space = {
@@ -271,20 +357,20 @@ object RuleGame {
   }
 
   // default S2B3 rules singleton
-  object defaultS2B3 extends S2B3
+  //object defaultS2B3 extends S2B3
 
-  object randomS2B3 extends S2B3 {
-    val initSize = 100
+  class RandomS2B3(params: Params) extends S2B3(params) {
+
     override lazy val initialSpace: PersistedSpace = persist({
       case _ => if (Random.nextBoolean()) ALIVE else DEAD
-    }, Some(Rect(Point(0, 0)).zoom(initSize / 2)))
+    }, Some(Rect(0, 0, spaceWidth, spaceHeight).translate(-spaceWidth / 2, -spaceHeight / 2)))
   }
 
   // list of implementations
-  lazy val defaultRules = defaultS2B3
+  lazy val defaultRules = (params: Params) => new S2B3(params) {}
   lazy val rules = Map(
-    "S2B3" -> defaultRules,
-    "Random S2B3 100x100" -> randomS2B3
+    "emptyS2B3" -> defaultRules,
+    "randomS2B3" -> ((params: Params) => new RandomS2B3(params))
   )
 
 }

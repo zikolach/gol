@@ -1,7 +1,6 @@
 $ ->
 
-    window.startGameUri ?= 'ws://localhost:8080/connect?user=zulu'
-    window.joinGameUri ?= 'ws://localhost:8080/connect?user=zulu&game='
+    window.startGameUri ?= 'ws://localhost:8080/connect'
     window.listGamesUri ?= 'ws://localhost:8080/list'
 
     class GameOfLife
@@ -30,7 +29,19 @@ $ ->
             y = Math.floor(position[1] / @cellSize[1] + @offset[1])
             return [x, y]
 
-        constructor: (url) ->
+        constructor: (params) ->
+            @params = params
+
+            # prepare url
+            url = window.startGameUri
+            url += "?player=#{@player}"
+            url += "&game=#{params.game}"                   if params.game?
+            url += "&gameStrategy=#{params.gameStrategy}"   if params.gameStrategy?
+            url += "&spaceType=#{params.spaceType}"         if params.spaceType?
+            url += "&spaceWidth=#{params.spaceWidth}"       if params.spaceWidth?
+            url += "&spaceHeight=#{params.spaceHeight}"     if params.spaceHeight?
+            console.log url
+
             # display elements
             $('#createGame').hide()
             $('#game').show()
@@ -41,6 +52,9 @@ $ ->
             @height = 50
             @canvas = $("<canvas id=\"gameSpace\" width=\"#{@width * @cellSize[0]}\" height=\"#{@height * @cellSize[1]}\"></canvas>")[0]
             $('div#gameSpace').append($(@canvas))
+
+            console.log @offset
+            @offset = [-@width / 2, -@height / 2]
 
             # server
             @websocket = new WebSocket(url)
@@ -60,10 +74,11 @@ $ ->
             $(@canvas).on 'mouseup', (evt) -> self.canvasMouseUp(evt)
             $(@canvas).on 'mousemove', (evt) -> self.canvasMouseMove(evt)
 
-            @interval = setInterval( ->
-                self.updateCanvas()
-            , 20
-            )
+#            @interval = setInterval( ->
+#                self.updateCanvas()
+#            , 20
+#            )
+            @setupLoop()
             @needsUpdate = true
             return
 
@@ -81,6 +96,34 @@ $ ->
             $("#game").hide()
             $("#createGame").show()
             console.log 'destroyed!'
+            return
+
+
+        setupLoop: ->
+
+            self = @
+
+            mainloop = -> self.updateCanvas()
+
+            animFrame = (window.requestAnimationFrame ||
+                    window.webkitRequestAnimationFrame ||
+                    window.mozRequestAnimationFrame    ||
+                    window.oRequestAnimationFrame      ||
+                    window.msRequestAnimationFrame     ||
+                    null)
+
+            if animFrame?
+                canvas = @canvas
+
+                recursiveAnim = ->
+                    mainloop()
+                    animFrame( recursiveAnim, canvas ) if canvas?
+
+                animFrame( recursiveAnim, canvas )
+            else
+                ONE_FRAME_TIME = 1000.0 / 60.0
+                @interval = setInterval( mainloop, ONE_FRAME_TIME )
+            return
 
         stop: ->
             @websocket.send 'STOP'
@@ -107,6 +150,8 @@ $ ->
                 when 'UPDATE'
                     if @gameName isnt command[1]
                         @gameName = command[1]
+                        @params.spaceWidth = command[2]
+                        @params.spaceHeight = command[3]
                         $('#list').val(@gameName)
                     cells = data.slice(1).map (c) -> c.split(':')
                     @updateSpace(cells)
@@ -181,6 +226,8 @@ $ ->
 
         updateCanvas: ->
 
+            return unless @canvas?
+
             if @needsUpdate
                 ctx = @canvas.getContext('2d')
                 w = @canvas.width
@@ -212,17 +259,31 @@ $ ->
                     pos = @translateToCanvas(cell)
                     ctx.fillRect(pos[0], pos[1], cellW, cellH) if pos[0] > -cellW and pos[0] < w + cellW and pos[1] > -cellH and pos[1] < h + cellH
 
+                @drawSpace()
+
                 @displayMinimap() if @showMinimap
 
                 @display = ctx.getImageData(0, 0, w, h)
                 @needsUpdate = false
 
+
             @drawPointer()
+            return
+
+        drawSpace: ->
+            w = parseInt(@params.spaceWidth)
+            h = parseInt(@params.spaceHeight)
+            if w? && h?
+                ctx = @canvas.getContext('2d')
+                ctx.strokeStyle = "blue"
+                pos = @translateToCanvas([-w/2,-h/2])
+#                console.log w + ":" + h
+                ctx.strokeRect(pos[0], pos[1], (w+1) * @cellSize[0], (h+1) * @cellSize[1])
             return
 
         drawPointer: ->
             # if there is no cache
-            @updateCanvas() until @display
+            @updateCanvas() unless @display
             ctx = @canvas.getContext('2d')
             # restore screen
             ctx.putImageData(@display, 0, 0)
@@ -273,7 +334,7 @@ $ ->
                     type: 'move'
                 }
             @cursor = [evt.offsetX, evt.offsetY]
-            @drawPointer()
+            #@drawPointer()
             return
 
         updateWidth: ->
@@ -301,13 +362,27 @@ $ ->
             choise = $('#list').val()
             game.destroy() if game
             console.log "your choise is #{choise}"
-            game = new GameOfLife(joinGameUri + choise)
+            game = new GameOfLife
+                game:       choise
+                player:     "zulu"
 
     window.onresize = (evt) -> if game? then game.updateWidth()
+
     $("#create").on 'click', ->
         console.log 'create a new game...'
         game.destroy() if game
-        game = new GameOfLife(startGameUri)
+#        gameStrategy = $('#gameStrategy').val()
+#        spaceType = $('#spaceType').val()
+#        spaceWidth = $('#spaceWidth').val()
+#        spaceHeight = $('#spaceHeight').val()
+#        console.log "#{gameStrategy} #{spaceType}[#{spaceWidth}x#{spaceHeight}]"
+        #game = new GameOfLife("#{startGameUri}?user=zulu&gameStrategy=#{gameStrategy}&spaceType=#{spaceType}&spaceWidth=#{spaceWidth}&spaceHeight=#{spaceHeight}")
+        game = new GameOfLife
+            player:         "zulu"
+            gameStrategy:   $('#gameStrategy').val()
+            spaceType:      $('#spaceType').val()
+            spaceWidth:     $('#spaceWidth').val()
+            spaceHeight:    $('#spaceHeight').val()
         return
 
     initList()

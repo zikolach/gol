@@ -37,7 +37,7 @@
         <!-- main content goes here -->
         <div id="createGame" class="row">
             <div class="large-12 columns">
-                <form>
+                <form data-abide>
                     <div class="row collapse">
                         <div class="large-5 medium-5 columns">
                             <fieldset>
@@ -75,18 +75,18 @@
                                     <div class="large-4 medium-4 columns">
                                         <label>Space</label>
                                         <select id="spaceType">
-                                            <option value="fixed" selected>Fixed</option>
-                                            <option value="reflective">Reflective</option>
+                                            <option value="fixed">Fixed</option>
+                                            <option value="reflective" selected>Reflective</option>
                                             <option value="infinite">Infinite</option>
                                         </select>
                                     </div>
                                     <div class="large-4 medium-4 columns">
                                         <label>Width</label>
-                                        <input type="text" placeholder="Width" />
+                                        <input id="spaceWidth" type="text" value="40" placeholder="Width" pattern="^[0-9]+$"/>
                                     </div>
                                     <div class="large-4 medium-4 columns">
                                         <label>Height</label>
-                                        <input type="text" placeholder="Height" />
+                                        <input id="spaceHeight" type="text" value="40" placeholder="Height" pattern="^[0-9]+$"/>
                                     </div>
                                 </div>
                                 <div class="row">
